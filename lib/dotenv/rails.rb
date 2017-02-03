@@ -13,17 +13,18 @@ if defined?(Rake.application)
   Rails.env = ENV["RAILS_ENV"] ||= "test" if is_running_specs
 end
 
-Dotenv.instrumenter = ActiveSupport::Notifications
-
-# Watch all loaded env files with Spring
-begin
-  require "spring/commands"
-  ActiveSupport::Notifications.subscribe(/^dotenv/) do |*args|
-    event = ActiveSupport::Notifications::Event.new(*args)
-    Spring.watch event.payload[:env].filename if Rails.application
+unless ENV["DISABLE_SPRING"]
+  Dotenv.instrumenter = ActiveSupport::Notifications
+  # Watch all loaded env files with Spring
+  begin
+    require "spring/commands"
+    ActiveSupport::Notifications.subscribe(/^dotenv/) do |*args|
+      event = ActiveSupport::Notifications::Event.new(*args)
+      Spring.watch event.payload[:env].filename if Rails.application
+    end
+  rescue LoadError
+    # Spring is not available
   end
-rescue LoadError
-  # Spring is not available
 end
 
 module Dotenv
@@ -48,7 +49,7 @@ module Dotenv
     # Rails uses `#method_missing` to delegate all class methods to the
     # instance, which means `Kernel#load` gets called here. We don't want that.
     def self.load
-      instance.load
+      instance.load unless ENV["DISABLE_SPRING"]
     end
 
     config.before_configuration { load }
